@@ -1,0 +1,16 @@
+customer_id,customer_name,region,segment
+C001,Alpha Consulting,Tunis,B2B
+C002,Beta Insurance,Tunis,B2B
+C003,Central University,Ariana,Education
+C004,MedCare Clinic,Sousse,Healthcare
+C005,Digital Factory,Sfax,B2B
+C006,Retail Shop One,Nabeul,Retail
+C007,Gamma Bank,Tunis,Banking
+C008,LogisTrans,Ben Arous,Logistics
+C009,Public Administration,Bizerte,Public
+C010,Smart School,Monastir,Education
+C011,Delta Services,Tunis,B2B
+C012,Omega Distribution,Sfax,Retail
+C013,North Hospital,Ariana,Healthcare
+C014,Atlas Telecom,Tunis,Telecom
+C015,Future Academy,Sousse,Education

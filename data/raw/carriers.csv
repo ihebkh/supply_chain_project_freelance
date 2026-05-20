@@ -1,0 +1,6 @@
+carrier_id,carrier_name,carrier_type
+CR001,RapidExpress,Road
+CR002,TransMed,Road
+CR003,AirFast Logistics,Air
+CR004,SeaLine Cargo,Sea
+CR005,Local Delivery TN,Road

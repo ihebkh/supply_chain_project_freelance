@@ -1,0 +1,9 @@
+supplier_id,supplier_name,country,city,supplier_type
+S001,TechSource Europe,France,Paris,International
+S002,Global IT Supply,Germany,Berlin,International
+S003,Tunis Office Distribution,Tunisia,Tunis,Local
+S004,North Africa Logistics,Tunisia,Sfax,Local
+S005,Mediterranean Electronics,Italy,Milan,International
+S006,Smart Hardware Group,Spain,Madrid,International
+S007,OfficePro Tunisia,Tunisia,Sousse,Local
+S008,Euro Furniture Supply,Portugal,Lisbon,International

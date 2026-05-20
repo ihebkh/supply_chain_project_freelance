@@ -1,0 +1,21 @@
+product_id,product_name,category,brand,unit_price,stock_minimum
+P001,Laptop Dell Latitude,Electronics,Dell,2450.0,10
+P002,Laptop HP ProBook,Electronics,HP,2200.0,12
+P003,Desktop Lenovo ThinkCentre,Electronics,Lenovo,1800.0,8
+P004,Monitor Samsung 24,Electronics,Samsung,520.0,20
+P005,Monitor LG 27,Electronics,LG,720.0,15
+P006,Keyboard Logitech,Accessories,Logitech,85.0,50
+P007,Mouse Logitech,Accessories,Logitech,55.0,60
+P008,Headset JBL,Accessories,JBL,140.0,30
+P009,Printer Canon,Office Equipment,Canon,780.0,10
+P010,Printer HP LaserJet,Office Equipment,HP,950.0,8
+P011,Office Chair,Furniture,ComfortPlus,320.0,25
+P012,Office Desk,Furniture,WoodPro,650.0,15
+P013,LED Lamp,Furniture,LightTech,75.0,40
+P014,A4 Paper Pack,Office Supplies,PaperOne,18.0,200
+P015,Ink Cartridge Black,Office Supplies,Canon,95.0,80
+P016,Ink Cartridge Color,Office Supplies,Canon,120.0,70
+P017,USB Cable,Accessories,Anker,22.0,100
+P018,HDMI Cable,Accessories,Anker,35.0,90
+P019,External Hard Drive 1TB,Storage,Seagate,210.0,25
+P020,SSD 512GB,Storage,Kingston,180.0,35

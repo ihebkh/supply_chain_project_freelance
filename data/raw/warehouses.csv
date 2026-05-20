@@ -1,0 +1,5 @@
+warehouse_id,warehouse_name,region,capacity
+W001,Central Warehouse Tunis,Tunis,5000
+W002,South Warehouse Sfax,Sfax,3500
+W003,Coastal Warehouse Sousse,Sousse,3000
+W004,North Warehouse Bizerte,Bizerte,2200
