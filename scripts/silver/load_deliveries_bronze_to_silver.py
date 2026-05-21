@@ -24,7 +24,7 @@ def load_deliveries_bronze_to_silver(spark: SparkSession):
         .filter(col("expected_date").isNotNull())
     
     # Déduplication sur delivery_id
-    window_spec = Window.partitionBy("delivery_id").orderBy("delivery_date")
+    window_spec = Window.partitionBy("delivery_id").orderBy("expected_date")
     df_silver = df_silver.withColumn("row_num", row_number().over(window_spec)) \
         .filter(col("row_num") == 1) \
         .drop("row_num")

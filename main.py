@@ -27,6 +27,19 @@ from scripts.silver.load_sales_orders_bronze_to_silver import load_sales_orders_
 from scripts.silver.load_suppliers_bronze_to_silver import load_suppliers_bronze_to_silver
 from scripts.silver.load_warehouses_bronze_to_silver import load_warehouses_bronze_to_silver
 
+# Imports de toutes les fonctions Gold - Dimensions
+from scripts.gold.load_dim_customers import load_dim_customers
+from scripts.gold.load_dim_products import load_dim_products
+from scripts.gold.load_dim_carriers import load_dim_carriers
+from scripts.gold.load_dim_suppliers import load_dim_suppliers
+from scripts.gold.load_dim_warehouses import load_dim_warehouses
+
+# Imports de toutes les fonctions Gold - Facts
+from scripts.gold.load_fact_sales import load_fact_sales
+from scripts.gold.load_fact_purchases import load_fact_purchases
+from scripts.gold.load_fact_deliveries import load_fact_deliveries
+from scripts.gold.load_fact_inventory_movements import load_fact_inventory_movements
+
 def main():
     print("🚀 Initialisation du pipeline de données Supply Chain complet...")
     
@@ -122,6 +135,58 @@ def main():
         
         print("\n================================================")
         print("🏆 TOUTE LA COUCHE SILVER A ÉTÉ TRANSFORMÉE AVEC SUCCÈS !")
+        print("================================================")
+        
+        print("\n================================================")
+        print("✨ DÉMARRAGE DE LA COUCHE GOLD (DATA WAREHOUSE) ✨")
+        print("================================================")
+        
+        # ============== DIMENSIONS ==============
+        print("\n=== CRÉATION DES DIMENSIONS ===")
+        
+        # 1. Dimension Customers
+        print("\n--- [1/5] CRÉATION DIMENSION CUSTOMERS ---")
+        load_dim_customers(spark)
+        
+        # 2. Dimension Products
+        print("\n--- [2/5] CRÉATION DIMENSION PRODUCTS ---")
+        load_dim_products(spark)
+        
+        # 3. Dimension Carriers
+        print("\n--- [3/5] CRÉATION DIMENSION CARRIERS ---")
+        load_dim_carriers(spark)
+        
+        # 4. Dimension Suppliers
+        print("\n--- [4/5] CRÉATION DIMENSION SUPPLIERS ---")
+        load_dim_suppliers(spark)
+        
+        # 5. Dimension Warehouses
+        print("\n--- [5/5] CRÉATION DIMENSION WAREHOUSES ---")
+        load_dim_warehouses(spark)
+        
+        print("\n✅ Toutes les dimensions ont été créées avec succès !")
+        
+        # ============== TABLES DE FAITS ==============
+        print("\n=== CRÉATION DES TABLES DE FAITS ===")
+        
+        # 1. Fact Sales
+        print("\n--- [1/4] CRÉATION FACT SALES ---")
+        load_fact_sales(spark)
+        
+        # 2. Fact Purchases
+        print("\n--- [2/4] CRÉATION FACT PURCHASES ---")
+        load_fact_purchases(spark)
+        
+        # 3. Fact Deliveries
+        print("\n--- [3/4] CRÉATION FACT DELIVERIES ---")
+        load_fact_deliveries(spark)
+        
+        # 4. Fact Inventory Movements
+        print("\n--- [4/4] CRÉATION FACT INVENTORY MOVEMENTS ---")
+        load_fact_inventory_movements(spark)
+        
+        print("\n================================================")
+        print("🏆 TOUTE LA COUCHE GOLD A ÉTÉ CRÉÉE AVEC SUCCÈS !")
         print("================================================")
         
     except Exception as e:
