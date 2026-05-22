@@ -1,9 +1,36 @@
 import sys
 import os
+
+# Force UTF-8 encoding for console output (fixes emoji display on Windows)
+if sys.stdout.encoding != 'utf-8':
+    import io
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+
+# ==================== CHARGEMENT ENV ====================
+from dotenv import load_dotenv
+load_dotenv()  # Charge .env avant tout (USE_HDFS, HDFS_HOST, etc.)
+
 from pyspark.sql import SparkSession
 
 # Ajouter le répertoire de base au sys.path pour les imports locaux
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
+# Imports config centralisée
+from config import (
+    get_spark_session,
+    USE_HDFS,
+    HDFS_NAMENODE,
+    path_exists,
+    RAW_PRODUCTS,
+    RAW_CARRIERS,
+    RAW_CUSTOMERS,
+    RAW_DELIVERIES,
+    RAW_INVENTORY,
+    RAW_PURCHASES,
+    RAW_SALES,
+    RAW_SUPPLIERS,
+    RAW_WAREHOUSES,
+)
 
 # Imports de toutes les fonctions d'ingestion Bronze
 from scripts.bronze.load_products_raw_to_bronze import load_products_raw_to_bronze
@@ -40,160 +67,198 @@ from scripts.gold.load_fact_purchases import load_fact_purchases
 from scripts.gold.load_fact_deliveries import load_fact_deliveries
 from scripts.gold.load_fact_inventory_movements import load_fact_inventory_movements
 
+
 def main():
-    print("🚀 Initialisation du pipeline de données Supply Chain complet...")
-    
-    # Création de la session Spark unique
-    spark = SparkSession.builder \
-        .appName("Supply Chain Complete Master Pipeline") \
-        .getOrCreate()
-    
+    # ==================== AFFICHAGE CONFIG ====================
+    print("=" * 60)
+    print("🚀 PIPELINE DE DONNÉES SUPPLY CHAIN")
+    print("=" * 60)
+    if USE_HDFS:
+        print(f"📡 Mode         : HDFS")
+        print(f"📡 NameNode     : {HDFS_NAMENODE}")
+    else:
+        print(f"💾 Mode         : LOCAL")
+    print("=" * 60)
+
+    # ==================== SESSION SPARK ====================
+    # Before creating the Spark session, verify raw input files exist
+    def verify_raw_files():
+        raw_files = {
+            "products": RAW_PRODUCTS,
+            "carriers": RAW_CARRIERS,
+            "customers": RAW_CUSTOMERS,
+            "deliveries": RAW_DELIVERIES,
+            "inventory_movements": RAW_INVENTORY,
+            "purchase_orders": RAW_PURCHASES,
+            "sales_orders": RAW_SALES,
+            "suppliers": RAW_SUPPLIERS,
+            "warehouses": RAW_WAREHOUSES,
+        }
+
+        missing = []
+        for name, p in raw_files.items():
+            if not path_exists(p):
+                missing.append((name, p))
+
+        if missing:
+            print("\n❌ Fichiers RAW manquants ou inaccessibles :")
+            for name, p in missing:
+                print(f" - {name}: {p}")
+            if USE_HDFS:
+                print("\nConseils :")
+                print(" - Vérifiez que tous les DataNodes sont en ligne (docker ps dans votre cluster).")
+                print(" - Re-téléversez les CSV dans HDFS (docker cp ... puis hdfs dfs -put ...).")
+                print(" - Vérifiez l'état HDFS via l'UI : http://localhost:9870 (ou le port configuré).")
+            else:
+                print("\nConseils :")
+                print(" - Vérifiez que les fichiers existent sous le dossier 'data/raw'.")
+            raise RuntimeError("Fichiers RAW manquants - interrompre l'exécution")
+
+    verify_raw_files()
+
+    spark = get_spark_session("Supply Chain Complete Master Pipeline")
+    print(f"✅ Spark initialisé : {spark.version}")
+
     try:
-        print("\n================================================")
-        print("⚡ DÉMARRAGE DE L'INGESTION COMPLÈTE (COUCHE BRONZE) ⚡")
-        print("================================================")
-        
-        # 1. Produits
+        # ==================================================
+        # COUCHE BRONZE
+        # ==================================================
+        print("\n" + "=" * 60)
+        print("⚡ COUCHE BRONZE — INGESTION RAW → BRONZE")
+        print("=" * 60)
+
         print("\n--- [1/9] INGESTION DES PRODUITS ---")
         load_products_raw_to_bronze(spark)
-        
-        # 2. Transporteurs
+
         print("\n--- [2/9] INGESTION DES TRANSPORTEURS ---")
         load_carriers_raw_to_bronze(spark)
-        
-        # 3. Clients
+
         print("\n--- [3/9] INGESTION DES CLIENTS ---")
         load_customers_raw_to_bronze(spark)
-        
-        # 4. Livraisons
+
         print("\n--- [4/9] INGESTION DES LIVRAISONS ---")
         load_deliveries_raw_to_bronze(spark)
-        
-        # 5. Mouvements de stock
+
         print("\n--- [5/9] INGESTION DES MOUVEMENTS DE STOCK ---")
         load_inventory_movements_raw_to_bronze(spark)
-        
-        # 6. Commandes d'achat
+
         print("\n--- [6/9] INGESTION DES COMMANDES D'ACHAT ---")
         load_purchase_orders_raw_to_bronze(spark)
-        
-        # 7. Commandes de vente
+
         print("\n--- [7/9] INGESTION DES COMMANDES DE VENTE ---")
         load_sales_orders_raw_to_bronze(spark)
-        
-        # 8. Fournisseurs
+
         print("\n--- [8/9] INGESTION DES FOURNISSEURS ---")
         load_suppliers_raw_to_bronze(spark)
-        
-        # 9. Entrepôts
+
         print("\n--- [9/9] INGESTION DES ENTREPÔTS ---")
         load_warehouses_raw_to_bronze(spark)
-        
-        print("\n================================================")
-        print("🏆 TOUTE LA COUCHE BRONZE A ÉTÉ INGÉRÉE AVEC SUCCÈS !")
-        print("================================================")
-        
-        print("\n================================================")
-        print("⚡ DÉMARRAGE DES TRANSFORMATIONS (COUCHE SILVER) ⚡")
-        print("================================================")
-        
-        # 1. Produits
+
+        print("\n🏆 COUCHE BRONZE COMPLÈTE !")
+
+        # ==================================================
+        # COUCHE SILVER
+        # ==================================================
+        print("\n" + "=" * 60)
+        print("⚡ COUCHE SILVER — TRANSFORMATION BRONZE → SILVER")
+        print("=" * 60)
+
         print("\n--- [1/9] TRANSFORMATION DES PRODUITS ---")
         load_products_bronze_to_silver(spark)
-        
-        # 2. Transporteurs
+
         print("\n--- [2/9] TRANSFORMATION DES TRANSPORTEURS ---")
         load_carriers_bronze_to_silver(spark)
-        
-        # 3. Clients
+
         print("\n--- [3/9] TRANSFORMATION DES CLIENTS ---")
         load_customers_bronze_to_silver(spark)
-        
-        # 4. Livraisons
+
         print("\n--- [4/9] TRANSFORMATION DES LIVRAISONS ---")
         load_deliveries_bronze_to_silver(spark)
-        
-        # 5. Mouvements de stock
+
         print("\n--- [5/9] TRANSFORMATION DES MOUVEMENTS DE STOCK ---")
         load_inventory_movements_bronze_to_silver(spark)
-        
-        # 6. Commandes d'achat
+
         print("\n--- [6/9] TRANSFORMATION DES COMMANDES D'ACHAT ---")
         load_purchase_orders_bronze_to_silver(spark)
-        
-        # 7. Commandes de vente
+
         print("\n--- [7/9] TRANSFORMATION DES COMMANDES DE VENTE ---")
         load_sales_orders_bronze_to_silver(spark)
-        
-        # 8. Fournisseurs
+
         print("\n--- [8/9] TRANSFORMATION DES FOURNISSEURS ---")
         load_suppliers_bronze_to_silver(spark)
-        
-        # 9. Entrepôts
+
         print("\n--- [9/9] TRANSFORMATION DES ENTREPÔTS ---")
         load_warehouses_bronze_to_silver(spark)
-        
-        print("\n================================================")
-        print("🏆 TOUTE LA COUCHE SILVER A ÉTÉ TRANSFORMÉE AVEC SUCCÈS !")
-        print("================================================")
-        
-        print("\n================================================")
-        print("✨ DÉMARRAGE DE LA COUCHE GOLD (DATA WAREHOUSE) ✨")
-        print("================================================")
-        
-        # ============== DIMENSIONS ==============
-        print("\n=== CRÉATION DES DIMENSIONS ===")
-        
-        # 1. Dimension Customers
-        print("\n--- [1/5] CRÉATION DIMENSION CUSTOMERS ---")
+
+        print("\n🏆 COUCHE SILVER COMPLÈTE !")
+
+        # ==================================================
+        # COUCHE GOLD — DIMENSIONS
+        # ==================================================
+        print("\n" + "=" * 60)
+        print("✨ COUCHE GOLD — DIMENSIONS")
+        print("=" * 60)
+
+        print("\n--- [1/5] DIMENSION CUSTOMERS ---")
         load_dim_customers(spark)
-        
-        # 2. Dimension Products
-        print("\n--- [2/5] CRÉATION DIMENSION PRODUCTS ---")
+
+        print("\n--- [2/5] DIMENSION PRODUCTS ---")
         load_dim_products(spark)
-        
-        # 3. Dimension Carriers
-        print("\n--- [3/5] CRÉATION DIMENSION CARRIERS ---")
+
+        print("\n--- [3/5] DIMENSION CARRIERS ---")
         load_dim_carriers(spark)
-        
-        # 4. Dimension Suppliers
-        print("\n--- [4/5] CRÉATION DIMENSION SUPPLIERS ---")
+
+        print("\n--- [4/5] DIMENSION SUPPLIERS ---")
         load_dim_suppliers(spark)
-        
-        # 5. Dimension Warehouses
-        print("\n--- [5/5] CRÉATION DIMENSION WAREHOUSES ---")
+
+        print("\n--- [5/5] DIMENSION WAREHOUSES ---")
         load_dim_warehouses(spark)
-        
-        print("\n✅ Toutes les dimensions ont été créées avec succès !")
-        
-        # ============== TABLES DE FAITS ==============
-        print("\n=== CRÉATION DES TABLES DE FAITS ===")
-        
-        # 1. Fact Sales
-        print("\n--- [1/4] CRÉATION FACT SALES ---")
+
+        print("\n✅ Toutes les dimensions créées !")
+
+        # ==================================================
+        # COUCHE GOLD — FACTS
+        # ==================================================
+        print("\n" + "=" * 60)
+        print("✨ COUCHE GOLD — TABLES DE FAITS")
+        print("=" * 60)
+
+        print("\n--- [1/4] FACT SALES ---")
         load_fact_sales(spark)
-        
-        # 2. Fact Purchases
-        print("\n--- [2/4] CRÉATION FACT PURCHASES ---")
+
+        print("\n--- [2/4] FACT PURCHASES ---")
         load_fact_purchases(spark)
-        
-        # 3. Fact Deliveries
-        print("\n--- [3/4] CRÉATION FACT DELIVERIES ---")
+
+        print("\n--- [3/4] FACT DELIVERIES ---")
         load_fact_deliveries(spark)
-        
-        # 4. Fact Inventory Movements
-        print("\n--- [4/4] CRÉATION FACT INVENTORY MOVEMENTS ---")
+
+        print("\n--- [4/4] FACT INVENTORY MOVEMENTS ---")
         load_fact_inventory_movements(spark)
-        
-        print("\n================================================")
-        print("🏆 TOUTE LA COUCHE GOLD A ÉTÉ CRÉÉE AVEC SUCCÈS !")
-        print("================================================")
-        
+
+        print("\n🏆 COUCHE GOLD COMPLÈTE !")
+
+        # ==================================================
+        # RÉSUMÉ FINAL
+        # ==================================================
+        print("\n" + "=" * 60)
+        print("🎉 PIPELINE TERMINÉ AVEC SUCCÈS !")
+        print("=" * 60)
+        if USE_HDFS:
+            print(f"📂 Données disponibles sur HDFS : {HDFS_NAMENODE}/supply-chain")
+            print("🌐 UI HDFS : http://localhost:9870")
+        else:
+            print("📂 Données disponibles dans : data/")
+        print("=" * 60)
+
     except Exception as e:
         print(f"\n❌ Erreur critique lors de l'exécution du pipeline : {e}")
+        import traceback
+        traceback.print_exc()
+
     finally:
-        # Assurer la libération des ressources Spark
         spark.stop()
+        print("\n✅ Session Spark arrêtée proprement.")
+
 
 if __name__ == "__main__":
     main()

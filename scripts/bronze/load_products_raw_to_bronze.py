@@ -1,29 +1,18 @@
 from pyspark.sql import SparkSession
+from config import RAW_PRODUCTS, BRONZE_PRODUCTS
 
 def load_products_raw_to_bronze(spark: SparkSession):
     print("📥 Ingestion des produits (Raw -> Bronze)...")
-    
-    # Lire le fichier CSV depuis raw
-    df_products = spark.read \
+    df = spark.read \
         .option("header", True) \
         .option("inferSchema", True) \
-        .csv("data/raw/products.csv")
-
-    # Vérifier les données
-    df_products.show()
-    df_products.printSchema()
-
-    # Écrire dans Bronze au format Parquet
-    df_products.write \
-        .mode("overwrite") \
-        .parquet("data/bronze/products")
-    
-    print("✅ Products saved successfully in data/bronze/products")
+        .csv(RAW_PRODUCTS)
+    df.show(5)
+    df.printSchema()
+    df.write.mode("overwrite").parquet(BRONZE_PRODUCTS)
+    print(f"✅ Products saved successfully in {BRONZE_PRODUCTS}")
 
 if __name__ == "__main__":
-    # Permet d'exécuter ce script de façon autonome
-    spark = SparkSession.builder \
-        .appName("Load Products Bronze") \
-        .getOrCreate()
+    spark = SparkSession.builder.appName("Load Products Bronze").getOrCreate()
     load_products_raw_to_bronze(spark)
     spark.stop()
