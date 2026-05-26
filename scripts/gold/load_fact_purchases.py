@@ -1,6 +1,13 @@
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import col
-from config import SILVER_PURCHASES, SILVER_PRODUCTS, SILVER_SUPPLIERS, GOLD_FACT_PURCHASES
+from config import (
+    SILVER_PURCHASES,
+    SILVER_PRODUCTS,
+    SILVER_SUPPLIERS,
+    GOLD_FACT_PURCHASES,
+    POSTGRES_ENABLED,
+    write_dataframe_to_postgres,
+)
 
 def load_fact_purchases(spark: SparkSession):
     print("⭐ Création de la table de Faits Achats (Gold)...")
@@ -51,6 +58,10 @@ def load_fact_purchases(spark: SparkSession):
     # Écrire en Gold
     fact_purchases.write.mode("overwrite").parquet(GOLD_FACT_PURCHASES)
     print("✅ Fact Purchases saved successfully")
+
+    if POSTGRES_ENABLED:
+        write_dataframe_to_postgres(fact_purchases, "fact_purchases", ["purchase_id"])
+        print("✅ Fact Purchases upserted into Postgres")
 
 if __name__ == "__main__":
     spark = SparkSession.builder.appName("Load Fact Purchases Gold").getOrCreate()

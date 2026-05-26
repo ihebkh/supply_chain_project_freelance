@@ -5,18 +5,18 @@ load_dotenv()
 
 # ==================== CONFIGURATION ====================
 
-# Activer/désactiver HDFS via variable d'environnement ou directement ici
-USE_HDFS = os.getenv("USE_HDFS", "false").lower() == "true"
+# ==================== CONFIGURATION POSTGRES ====================
+POSTGRES_ENABLED  = os.getenv("POSTGRES_ENABLED", "false").lower() == "true"
+POSTGRES_HOST     = os.getenv("POSTGRES_HOST", "localhost")
+POSTGRES_PORT     = os.getenv("POSTGRES_PORT", "5432")
+POSTGRES_DB       = os.getenv("POSTGRES_DB", "supply_chain")
+POSTGRES_USER     = os.getenv("POSTGRES_USER", "postgres")
+POSTGRES_PASSWORD = os.getenv("POSTGRES_PASSWORD", "postgres")
 
-# ==================== CONFIGURATION HDFS ====================
-
-HDFS_NAMENODE_HOST = os.getenv("HDFS_HOST", "localhost")
-HDFS_NAMENODE_PORT = os.getenv("HDFS_PORT", "9000")
-HDFS_WEB_PORT      = os.getenv("HDFS_WEB_PORT", "9870")   # port WebHDFS / UI
-HDFS_USER          = os.getenv("HDFS_USER", "hadoop")
-
-HDFS_NAMENODE  = f"hdfs://{HDFS_NAMENODE_HOST}:{HDFS_NAMENODE_PORT}"
-HDFS_BASE_PATH = f"{HDFS_NAMENODE}/supply-chain"
+POSTGRES_URI = (
+    f"postgresql://{POSTGRES_USER}:{POSTGRES_PASSWORD}@"
+    f"{POSTGRES_HOST}:{POSTGRES_PORT}/{POSTGRES_DB}"
+)
 
 # ==================== CONFIGURATION LOCALE ====================
 
@@ -26,102 +26,109 @@ LOCAL_BASE_PATH = os.getenv("LOCAL_BASE_PATH", "data")
 
 def get_path(layer: str, entity: str) -> str:
     """
-    Retourne le chemin complet selon la configuration (HDFS ou Local).
+    Retourne le chemin complet en mode local.
 
     Args:
         layer  : 'raw', 'bronze', 'silver', 'gold'
         entity : 'carriers', 'carriers.csv', 'dim_customers', etc.
 
     Returns:
-        Chemin complet (local ou HDFS)
+        Chemin complet local
     """
-    if USE_HDFS:
-        return f"{HDFS_BASE_PATH}/{layer}/{entity}"
-    else:
-        return f"{LOCAL_BASE_PATH}/{layer}/{entity}"
+    return f"{LOCAL_BASE_PATH}/{layer}/{entity}"
 
 
 def get_layer_path(layer: str) -> str:
     """Retourne le chemin de base pour une couche (raw / bronze / silver / gold)."""
-    if USE_HDFS:
-        return f"{HDFS_BASE_PATH}/{layer}"
-    else:
-        return f"{LOCAL_BASE_PATH}/{layer}"
+    return f"{LOCAL_BASE_PATH}/{layer}"
 
 
 def get_spark_session(app_name: str = "SupplyChainPipeline"):
     """
-    Crée et retourne une SparkSession préconfigurée pour HDFS ou local.
+    Crée et retourne une SparkSession locale.
 
     Nécessite : pyspark installé (`pip install pyspark`).
     """
     from pyspark.sql import SparkSession
 
-    builder = SparkSession.builder.appName(app_name)
-
-    if USE_HDFS:
-        builder = (
-            builder
-            .config("spark.hadoop.fs.defaultFS", HDFS_NAMENODE)
-            # Force DataNode communication via IP address instead of hostname
-            # (fixes Docker hostname resolution issues when Spark runs on host)
-            .config("spark.hadoop.dfs.datanode.use.datanode.hostname", "false")
-            # Désactiver les permissions HDFS si votre cluster est en mode simple
-            .config("spark.hadoop.dfs.permissions.enabled", "false")
-        )
-
-    return builder.getOrCreate()
+    return SparkSession.builder.appName(app_name).getOrCreate()
 
 
-def get_hdfs_client():
+def get_postgres_connection():
     """
-    Retourne un client WebHDFS léger (bibliothèque `hdfs`).
-    Utile pour : vérifier l'existence d'un fichier, créer des dossiers,
-    lister des chemins, uploader de petits fichiers.
-
-    Nécessite : pip install hdfs
+    Retourne une connexion PostgreSQL utilisable par psycopg2.
     """
-    if not USE_HDFS:
-        raise RuntimeError("HDFS désactivé. Passez USE_HDFS=true pour l'utiliser.")
+    import psycopg2
 
-    from hdfs import InsecureClient
-    url = f"http://{HDFS_NAMENODE_HOST}:{HDFS_WEB_PORT}"
-    return InsecureClient(url, user=HDFS_USER)
+    return psycopg2.connect(
+        host=POSTGRES_HOST,
+        port=POSTGRES_PORT,
+        dbname=POSTGRES_DB,
+        user=POSTGRES_USER,
+        password=POSTGRES_PASSWORD,
+    )
+
+
+def write_dataframe_to_postgres(df, table_name: str, pk_columns: list[str]):
+    """Crée ou met à jour une table PostgreSQL à partir d'un DataFrame Spark."""
+    if not POSTGRES_ENABLED:
+        return
+
+    columns = df.columns
+    rows = [tuple(None if value is None else value for value in row) for row in df.collect()]
+    quoted_columns = ", ".join([f'"{col}" TEXT' for col in columns])
+    quoted_names = ", ".join([f'"{col}"' for col in columns])
+    placeholders = ", ".join(["%s"] * len(columns))
+
+    pk_definition = ""
+    conflict_target = ""
+    update_clause = ""
+    if pk_columns:
+        quoted_pk = ", ".join([f'"{col}"' for col in pk_columns])
+        pk_definition = f", PRIMARY KEY ({quoted_pk})"
+        conflict_target = f"ON CONFLICT ({quoted_pk})"
+        update_columns = [col for col in columns if col not in pk_columns]
+        if update_columns:
+            update_clause = " DO UPDATE SET " + ", ".join([
+                f'"{col}" = EXCLUDED."{col}"' for col in update_columns
+            ])
+        else:
+            update_clause = " DO NOTHING"
+
+    create_sql = f'CREATE TABLE IF NOT EXISTS "{table_name}" ({quoted_columns}{pk_definition})'
+    if not pk_columns:
+        insert_sql = f'INSERT INTO "{table_name}" ({quoted_names}) VALUES ({placeholders})'
+    else:
+        insert_sql = f'INSERT INTO "{table_name}" ({quoted_names}) VALUES ({placeholders}) {conflict_target}{update_clause}'
+
+    with get_postgres_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(create_sql)
+            if rows:
+                cur.executemany(insert_sql, rows)
+        conn.commit()
 
 
 def ensure_dir(path: str):
-    """
-    - En mode LOCAL  : crée le répertoire s'il n'existe pas.
-    - En mode HDFS   : Spark crée les dossiers automatiquement à l'écriture.
-                       Cette fonction ne fait rien (no-op).
-    """
-    if not USE_HDFS:
-        os.makedirs(path, exist_ok=True)
+    os.makedirs(path, exist_ok=True)
 
 
 def path_exists(path: str) -> bool:
     """
-    Vérifie si un chemin existe (local ou HDFS).
-    Pour HDFS, utilise le client WebHDFS.
+    Vérifie si un chemin existe en local.
     """
-    if USE_HDFS:
-        client = get_hdfs_client()
-        # Supprimer le préfixe hdfs://host:port pour WebHDFS
-        hdfs_path = "/" + path.split(f":{HDFS_NAMENODE_PORT}/", 1)[-1]
-        return client.status(hdfs_path, strict=False) is not None
-    else:
-        return os.path.exists(path)
+    return os.path.exists(path)
 
 
 def read_parquet(path: str, spark=None):
-    """Lit un fichier Parquet (local ou HDFS) via Spark."""
+    """Lit un fichier Parquet via Spark."""
     if spark is None:
         spark = get_spark_session()
     return spark.read.parquet(path)
 
 
 def write_parquet(df, path: str, mode: str = "overwrite", partition_by: list = None):
-    """Écrit un DataFrame Spark en Parquet (local ou HDFS)."""
+    """Écrit un DataFrame Spark en Parquet."""
     ensure_dir(path)
     writer = df.write.mode(mode)
     if partition_by:
@@ -130,7 +137,7 @@ def write_parquet(df, path: str, mode: str = "overwrite", partition_by: list = N
 
 
 def read_csv(path: str, spark=None, **kwargs):
-    """Lit un fichier CSV (local ou HDFS) via Spark."""
+    """Lit un fichier CSV via Spark."""
     if spark is None:
         spark = get_spark_session()
     return spark.read.csv(path, header=True, inferSchema=True, **kwargs)
@@ -188,14 +195,12 @@ GOLD_FACT_INVENTORY  = get_path("gold", "fact_inventory_movements")
 # ==================== RÉSUMÉ AU DÉMARRAGE ====================
 
 if __name__ == "__main__":
-    mode = "HDFS" if USE_HDFS else "LOCAL"
-    base = HDFS_BASE_PATH if USE_HDFS else LOCAL_BASE_PATH
+    mode = "LOCAL"
+    base = LOCAL_BASE_PATH
     print(f"[config] Mode actif    : {mode}")
     print(f"[config] Chemin de base: {base}")
-    if USE_HDFS:
-        print(f"[config] NameNode      : {HDFS_NAMENODE}")
-        print(f"[config] WebHDFS port  : {HDFS_WEB_PORT}")
-        print(f"[config] Utilisateur   : {HDFS_USER}")
+    if POSTGRES_ENABLED:
+        print(f"[config] Postgres      : {POSTGRES_USER}@{POSTGRES_HOST}:{POSTGRES_PORT}/{POSTGRES_DB}")
     print()
     print(f"  RAW_CARRIERS    → {RAW_CARRIERS}")
     print(f"  BRONZE_CARRIERS → {BRONZE_CARRIERS}")

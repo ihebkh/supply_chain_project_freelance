@@ -1,6 +1,12 @@
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import col, datediff, when
-from config import SILVER_DELIVERIES, SILVER_CARRIERS, GOLD_FACT_DELIVERIES
+from config import (
+    SILVER_DELIVERIES,
+    SILVER_CARRIERS,
+    GOLD_FACT_DELIVERIES,
+    POSTGRES_ENABLED,
+    write_dataframe_to_postgres,
+)
 
 def load_fact_deliveries(spark: SparkSession):
     print("⭐ Création de la table de Faits Livraisons (Gold)...")
@@ -45,6 +51,10 @@ def load_fact_deliveries(spark: SparkSession):
     # Écrire en Gold
     fact_deliveries.write.mode("overwrite").parquet(GOLD_FACT_DELIVERIES)
     print("✅ Fact Deliveries saved successfully")
+
+    if POSTGRES_ENABLED:
+        write_dataframe_to_postgres(fact_deliveries, "fact_deliveries", ["delivery_id"])
+        print("✅ Fact Deliveries upserted into Postgres")
 
 if __name__ == "__main__":
     spark = SparkSession.builder.appName("Load Fact Deliveries Gold").getOrCreate()

@@ -1,7 +1,12 @@
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import col, row_number
 from pyspark.sql.window import Window
-from config import SILVER_PRODUCTS, GOLD_DIM_PRODUCTS
+from config import (
+    SILVER_PRODUCTS,
+    GOLD_DIM_PRODUCTS,
+    POSTGRES_ENABLED,
+    write_dataframe_to_postgres,
+)
 
 def load_dim_products(spark: SparkSession):
     print("📊 Création de la dimension Produits (Gold)...")
@@ -36,6 +41,10 @@ def load_dim_products(spark: SparkSession):
     # Écrire en Gold
     df_dim.write.mode("overwrite").parquet(GOLD_DIM_PRODUCTS)
     print("✅ Dimension Products saved successfully")
+
+    if POSTGRES_ENABLED:
+        write_dataframe_to_postgres(df_dim, "dim_products", ["product_id"])
+        print("✅ Dimension Products upserted into Postgres")
 
 if __name__ == "__main__":
     spark = SparkSession.builder.appName("Load Dim Products Gold").getOrCreate()

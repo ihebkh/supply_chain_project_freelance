@@ -1,6 +1,13 @@
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import col
-from config import SILVER_INVENTORY, SILVER_PRODUCTS, SILVER_WAREHOUSES, GOLD_FACT_INVENTORY
+from config import (
+    SILVER_INVENTORY,
+    SILVER_PRODUCTS,
+    SILVER_WAREHOUSES,
+    GOLD_FACT_INVENTORY,
+    POSTGRES_ENABLED,
+    write_dataframe_to_postgres,
+)
 
 def load_fact_inventory_movements(spark: SparkSession):
     print("⭐ Création de la table de Faits Mouvements de Stock (Gold)...")
@@ -49,6 +56,10 @@ def load_fact_inventory_movements(spark: SparkSession):
     # Écrire en Gold
     fact_inventory.write.mode("overwrite").parquet(GOLD_FACT_INVENTORY)
     print("✅ Fact Inventory Movements saved successfully")
+
+    if POSTGRES_ENABLED:
+        write_dataframe_to_postgres(fact_inventory, "fact_inventory_movements", ["movement_id"])
+        print("✅ Fact Inventory Movements upserted into Postgres")
 
 if __name__ == "__main__":
     spark = SparkSession.builder.appName("Load Fact Inventory Gold").getOrCreate()

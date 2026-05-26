@@ -8,7 +8,7 @@ if sys.stdout.encoding != 'utf-8':
 
 # ==================== CHARGEMENT ENV ====================
 from dotenv import load_dotenv
-load_dotenv()  # Charge .env avant tout (USE_HDFS, HDFS_HOST, etc.)
+load_dotenv()
 
 from pyspark.sql import SparkSession
 
@@ -18,8 +18,7 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 # Imports config centralisée
 from config import (
     get_spark_session,
-    USE_HDFS,
-    HDFS_NAMENODE,
+    POSTGRES_ENABLED,
     path_exists,
     RAW_PRODUCTS,
     RAW_CARRIERS,
@@ -73,11 +72,7 @@ def main():
     print("=" * 60)
     print("🚀 PIPELINE DE DONNÉES SUPPLY CHAIN")
     print("=" * 60)
-    if USE_HDFS:
-        print(f"📡 Mode         : HDFS")
-        print(f"📡 NameNode     : {HDFS_NAMENODE}")
-    else:
-        print(f"💾 Mode         : LOCAL")
+    print(f"💾 Mode         : LOCAL")
     print("=" * 60)
 
     # ==================== SESSION SPARK ====================
@@ -104,14 +99,8 @@ def main():
             print("\n❌ Fichiers RAW manquants ou inaccessibles :")
             for name, p in missing:
                 print(f" - {name}: {p}")
-            if USE_HDFS:
-                print("\nConseils :")
-                print(" - Vérifiez que tous les DataNodes sont en ligne (docker ps dans votre cluster).")
-                print(" - Re-téléversez les CSV dans HDFS (docker cp ... puis hdfs dfs -put ...).")
-                print(" - Vérifiez l'état HDFS via l'UI : http://localhost:9870 (ou le port configuré).")
-            else:
-                print("\nConseils :")
-                print(" - Vérifiez que les fichiers existent sous le dossier 'data/raw'.")
+            print("\nConseils :")
+            print(" - Vérifiez que les fichiers existent sous le dossier 'data/raw'.")
             raise RuntimeError("Fichiers RAW manquants - interrompre l'exécution")
 
     verify_raw_files()
@@ -236,18 +225,15 @@ def main():
         load_fact_inventory_movements(spark)
 
         print("\n🏆 COUCHE GOLD COMPLÈTE !")
-
+        if POSTGRES_ENABLED:
+            print("\n✅ Toutes les tables GOLD ont été écrites dans PostgreSQL.")
         # ==================================================
         # RÉSUMÉ FINAL
         # ==================================================
         print("\n" + "=" * 60)
         print("🎉 PIPELINE TERMINÉ AVEC SUCCÈS !")
         print("=" * 60)
-        if USE_HDFS:
-            print(f"📂 Données disponibles sur HDFS : {HDFS_NAMENODE}/supply-chain")
-            print("🌐 UI HDFS : http://localhost:9870")
-        else:
-            print("📂 Données disponibles dans : data/")
+        print("📂 Données disponibles dans : data/")
         print("=" * 60)
 
     except Exception as e:

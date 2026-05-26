@@ -1,7 +1,12 @@
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import col, row_number
 from pyspark.sql.window import Window
-from config import SILVER_CARRIERS, GOLD_DIM_CARRIERS
+from config import (
+    SILVER_CARRIERS,
+    GOLD_DIM_CARRIERS,
+    POSTGRES_ENABLED,
+    write_dataframe_to_postgres,
+)
 
 def load_dim_carriers(spark: SparkSession):
     print("📊 Création de la dimension Transporteurs (Gold)...")
@@ -31,6 +36,10 @@ def load_dim_carriers(spark: SparkSession):
     # Écrire en Gold
     df_dim.write.mode("overwrite").parquet(GOLD_DIM_CARRIERS)
     print("✅ Dimension Carriers saved successfully")
+
+    if POSTGRES_ENABLED:
+        write_dataframe_to_postgres(df_dim, "dim_carriers", ["carrier_id"])
+        print("✅ Dimension Carriers upserted into Postgres")
 
 if __name__ == "__main__":
     spark = SparkSession.builder.appName("Load Dim Carriers Gold").getOrCreate()
